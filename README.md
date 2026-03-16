@@ -29,3 +29,11 @@ Project page
 - Load messages
 - Send message
 - Refresh page
+
+## Screenshots
+
+### Dashboard
+![Dashboard](screenshots/dashboard.png)
+
+### Project Chat
+![Chat](screenshots/chat.png)
