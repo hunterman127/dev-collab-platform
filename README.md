@@ -35,3 +35,12 @@ Realtime Messaging:
 Frontend (Socket.IO client)
         ↔
 Backend (Socket.IO server)
+
+- ##Screenshots
+
+- ### Dashboard
+- <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/5f566696-e267-41fa-9acf-4f7021a76e23" />
+
+-### Project Chat
+- <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/bac723cf-266f-4d2b-80c0-9a281b326e69" />
+
