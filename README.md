@@ -18,3 +18,20 @@ Project page
 - Load messages
 - Send message
 - Refresh page
+
+- ## Architecture
+
+Frontend (React + Vite)
+    |
+    | HTTP requests (Fetch API)
+    v
+Backend (Express API)
+    |
+    | PostgreSQL queries
+    v
+Database (PostgreSQL)
+
+Realtime Messaging:
+Frontend (Socket.IO client)
+        ↔
+Backend (Socket.IO server)
