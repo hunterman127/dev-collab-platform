@@ -5,26 +5,29 @@ const authMiddleware = require("../middleware/authMiddleware");
 const router = express.Router();
 
 router.post("/", authMiddleware, async (req, res) => {
-
-    const { name, description, status } = req.body;
+  try {
+    const { name, description, status, tech_stack, repo_url } = req.body;
 
     const project = await pool.query(
-        `INSERT INTO projects (name, description, owner_id, status)
-         VALUES ($1,$2,$3,$4)
-         RETURNING *`,
-        [name, description, req.user.id, status]
+      `INSERT INTO projects (name, description, owner_id, status, tech_stack, repo_url)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING *`,
+      [name, description, req.user.id, status, tech_stack, repo_url]
     );
 
     const projectId = project.rows[0].id;
 
     await pool.query(
-        `INSERT INTO memberships (user_id, project_id, role)
-         VALUES ($1,$2,$3)`,
-        [req.user.id, projectId, "owner"]
+      `INSERT INTO memberships (user_id, project_id, role)
+       VALUES ($1,$2,$3)`,
+      [req.user.id, projectId, "owner"]
     );
 
     res.json(project.rows[0]);
-
+  } catch (err) {
+    console.error("failed to create project:", err);
+    res.status(500).json({ error: "Failed to create project" });
+  }
 });
 
 router.get("/", authMiddleware, async (req, res) => {
@@ -184,6 +187,199 @@ router.delete("/:id", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error("delete project error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/:id/tasks", authMiddleware, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+
+    const membership = await pool.query(
+      `SELECT *
+       FROM memberships
+       WHERE project_id = $1 AND user_id = $2`,
+      [projectId, req.user.id]
+    );
+
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const tasks = await pool.query(
+      `SELECT tasks.*, users.username AS assigned_username
+       FROM tasks
+       LEFT JOIN users ON tasks.assigned_to = users.id
+       WHERE tasks.project_id = $1
+       ORDER BY tasks.created_at DESC`,
+      [projectId]
+    );
+
+    res.json(tasks.rows);
+  } catch (err) {
+    console.error("failed to load tasks:", err);
+    res.status(500).json({ error: "Failed to load tasks" });
+  }
+});
+
+router.post("/:id/tasks", authMiddleware, async (req, res) => {
+  try {
+    const projectId = Number(req.params.id);
+    const { title, description, status, assigned_to } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ error: "Task title is required" });
+    }
+
+    const membership = await pool.query(
+      `SELECT *
+      FROM memberships
+      WHERE project_id = $1 AND user_id = $2`,
+      [projectId, req.user.id]
+    );
+
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const insertResult = await pool.query(
+      `INSERT INTO tasks (project_id, title, description, status, assigned_to)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, project_id, title, description, status, assigned_to, created_at`,
+      [
+        projectId,
+        title.trim(),
+        description || null,
+        status || "backlog",
+        assigned_to ? Number(assigned_to) : null,
+      ]
+    );
+
+    const newTaskId = insertResult.rows[0].id;
+
+    const fullTask = await pool.query(
+      `SELECT tasks.*, users.username AS assigned_username
+       FROM tasks
+       LEFT JOIN users ON tasks.assigned_to = users.id
+       WHERE tasks.id = $1`,
+      [newTaskId]
+    );
+
+    return res.json(fullTask.rows[0]);
+  } catch (err) {
+    console.error("failed to create task:", err);
+    return res.status(500).json({
+      error: "Failed to create task",
+      details: err.message,
+    });
+  }
+});
+
+router.patch("/:projectId/tasks/:taskId", authMiddleware, async (req, res) => {
+  try {
+    const projectId = Number(req.params.projectId);
+    const taskId = Number(req.params.taskId); 
+    const { status } = req.body;
+
+    const membership = await pool.query(
+      `SELECT *
+      FROM memberships
+      WHERE project_id = $1 AND user_id = $2`,
+      [projectId, req.user.id]
+    );
+
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const allowedStatuses = ["backlog", "in_progress", "done"];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid task status" });
+    }
+
+    const result = await pool.query(
+      `UPDATE tasks
+       SET status = $1
+       WHERE id = $2
+       RETURNING *`,
+      [status, taskId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("failed to update task status:", err);
+    res.status(500).json({ error: "Failed to update task status" });
+  }
+});
+
+router.delete("/:projectId/tasks/:taskId", authMiddleware, async (req, res) => {
+  try {
+    const projectId = Number(req.params.projectId);
+    const taskId = Number(req.params.taskId);
+
+    const membership = await pool.query(
+      `SELECT *
+       FROM memberships
+       WHERE project_id = $1 AND user_id = $2`,
+      [projectId, req.user.id]
+    );
+
+    if (membership.rows.length === 0) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const result = await pool.query(
+      `DELETE FROM tasks
+       WHERE id = $1 AND project_id = $2
+       RETURNING *`,
+      [taskId, projectId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+
+    return res.json({ message: "Task deleted", task: result.rows[0] });
+  } catch (err) {
+    console.error("failed to delete task:", err);
+    return res.status(500).json({ error: "Failed to delete task" });
+  }
+});
+
+router.put("/:id", authMiddleware, async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { description, status, tech_stack, repo_url } = req.body;
+
+    const projectCheck = await pool.query(
+      "SELECT * FROM projects WHERE id = $1 AND owner_id = $2",
+      [projectId, req.user.id]
+    );
+
+    if (projectCheck.rows.length === 0) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const result = await pool.query(
+      `UPDATE projects
+       SET description = $1,
+           status = $2,
+           tech_stack = $3,
+           repo_url = $4,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $5
+       RETURNING *`,
+      [description, status, tech_stack, repo_url, projectId]
+    );
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("failed to update project:", err);
+    res.status(500).json({ error: "Failed to update project" });
   }
 });
 

@@ -7,6 +7,8 @@ function Dashboard({ token, onLogout }) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const navigate = useNavigate();
+  const [techStack, setTechStack] = useState("");
+  const [repoUrl, setRepoUrl] = useState("");
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [projectsError, setProjectsError] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
@@ -20,12 +22,14 @@ function Dashboard({ token, onLogout }) {
     setProjectsError("");
 
     try {
-      const project = await createProject(token, name, description, "active");
+      const project = await createProject(token, name, description, "active", techStack, repoUrl);
 
       if (project && !project.error) {
         setProjects((prev) => [...prev, project]);
         setName("");
         setDescription("");
+        setTechStack("");
+        setRepoUrl("");
       } else {
         setProjectsError(project?.error || "Failed to create project");
       }
@@ -92,6 +96,18 @@ function Dashboard({ token, onLogout }) {
         onChange={(e) => setDescription(e.target.value)}
       />
 
+      <input
+        placeholder="Tech Stack (React, Node, PostgreSQL)"
+        value={techStack}
+        onChange={(e) => setTechStack(e.target.value)}
+      />
+
+      <input
+        placeholder="Repository URL (GitHub link)"
+        value={repoUrl}
+        onChange={(e) => setRepoUrl(e.target.value)}
+      />
+
       <button onClick={handleCreateProject} disabled={creatingProject}>
         {creatingProject ? "Creating..." : "Create"}
       </button>
@@ -100,7 +116,7 @@ function Dashboard({ token, onLogout }) {
       {loadingProjects ? (
         <p>Loading projects...</p>
       ) : projects.length === 0 ? (
-        <p>No projects yet</p>
+        <p>No projects yet. Create your first project workspace.</p>
       ) : null}
 
       {projects.map((project) => (
@@ -117,6 +133,10 @@ function Dashboard({ token, onLogout }) {
           <h3>{project.name}</h3>
 
           <p>{project.description}</p>
+          <p><strong>Status:</strong> {project.status}</p>
+          <p><strong>Tech Stack:</strong> {project.tech_stack}</p>
+          <p><strong>Repo:</strong> {project.repo_url}</p>
+          <p><strong>Owner ID:</strong> {project.owner_id}</p>
 
           <button
             onClick={(e) => {

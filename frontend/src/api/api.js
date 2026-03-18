@@ -54,14 +54,14 @@ export async function getProjects(token) {
   return handleResponse(res);
 }
 
-export async function createProject(token, name, description, status) {
+export async function createProject(token, name, description, status, tech_stack, repo_url) {
   const res = await fetch(`${API_URL}/projects`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ name, description, status }),
+    body: JSON.stringify({ name, description, status, tech_stack, repo_url }),
   });
 
   return handleResponse(res);
@@ -109,4 +109,70 @@ export async function deleteProject(token, projectId) {
   });
 
   return handleResponse(res);
+}
+
+export async function getProjectTasks(token, projectId) {
+  const res = await fetch(`http://localhost:3000/projects/${projectId}/tasks`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return res.json();
+}
+
+export async function createTask(token, projectId, taskData) {
+  const res = await fetch(`http://localhost:3000/projects/${projectId}/tasks`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(taskData),
+  });
+
+  return res.json();
+}
+
+export async function updateTaskStatus(token, projectId, taskId, status) {
+  const res = await fetch(
+    `http://localhost:3000/projects/${projectId}/tasks/${taskId}`,
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status }),
+    }
+  );
+
+  return res.json();
+}
+
+export async function deleteTask(token, projectId, taskId) {
+  const res = await fetch(
+    `http://localhost:3000/projects/${projectId}/tasks/${taskId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  return res.json();
+}
+
+export async function updateProject(token, projectId, data) {
+  const res = await fetch(`http://localhost:3000/projects/${projectId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+
+  return res.json();
 }
