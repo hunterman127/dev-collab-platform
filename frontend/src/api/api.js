@@ -112,17 +112,17 @@ export async function deleteProject(token, projectId) {
 }
 
 export async function getProjectTasks(token, projectId) {
-  const res = await fetch(`http://localhost:3000/projects/${projectId}/tasks`, {
+  const res = await fetch(`${API_URL}/projects/${projectId}/tasks`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function createTask(token, projectId, taskData) {
-  const res = await fetch(`http://localhost:3000/projects/${projectId}/tasks`, {
+  const res = await fetch(`${API_URL}/projects/${projectId}/tasks`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -131,12 +131,11 @@ export async function createTask(token, projectId, taskData) {
     body: JSON.stringify(taskData),
   });
 
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function updateTaskStatus(token, projectId, taskId, status) {
-  const res = await fetch(
-    `http://localhost:3000/projects/${projectId}/tasks/${taskId}`,
+  const res = await fetch(`${API_URL}/projects/${projectId}/tasks/${taskId}`,
     {
       method: "PATCH",
       headers: {
@@ -147,12 +146,11 @@ export async function updateTaskStatus(token, projectId, taskId, status) {
     }
   );
 
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function deleteTask(token, projectId, taskId) {
-  const res = await fetch(
-    `http://localhost:3000/projects/${projectId}/tasks/${taskId}`,
+  const res = await fetch(`${API_URL}/projects/${projectId}/tasks/${taskId}`,
     {
       method: "DELETE",
       headers: {
@@ -161,17 +159,84 @@ export async function deleteTask(token, projectId, taskId) {
     }
   );
 
-  return res.json();
+  return handleResponse(res);
 }
 
 export async function updateProject(token, projectId, data) {
-  const res = await fetch(`http://localhost:3000/projects/${projectId}`, {
+  const res = await fetch(`${API_URL}/projects/${projectId}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(data),
+  });
+
+  return handleResponse(res);
+}
+
+export async function sendInvite(projectId, username, token) {
+  const res = await fetch(`${API_URL}/projects/${projectId}/invite`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ username }),
+  });
+
+  return handleResponse(res);
+}
+
+export async function getInvites(token) {
+  const res = await fetch(`${API_URL}/projects/invites`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return handleResponse(res);
+}
+
+export async function acceptInvite(inviteId, token) {
+  const res = await fetch(`${API_URL}/projects/invites/${inviteId}/accept`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return handleResponse(res);
+}
+
+export async function declineInvite(inviteId, token) {
+  const res = await fetch(`${API_URL}/projects/invites/${inviteId}/decline`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return handleResponse(res);
+}
+
+export async function leaveProject(token, projectId) {
+  const res = await fetch(`${API_URL}/projects/${projectId}/leave`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return handleResponse(res);
+}
+
+export async function removeProjectMember(token, projectId, memberId) {
+  const res = await fetch(`${API_URL}/projects/${projectId}/members/${memberId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 
   return res.json();

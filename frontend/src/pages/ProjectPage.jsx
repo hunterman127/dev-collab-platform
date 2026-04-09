@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getProjectMessages, getProjectMembers, getProjectTasks, createTask, updateTaskStatus, deleteTask, updateProject } from "../api/api";
+import { getProjectMessages, getProjectMembers, getProjectTasks, createTask, updateTaskStatus, deleteTask, updateProject, removeProjectMember } from "../api/api";
 import { io } from "socket.io-client";
 import { useNavigate } from "react-router-dom";
+import { sendInvite } from "../api/api";
 
-const socket = io("http://localhost:3000");
+const socket = io(import.meta.env.VITE_API_URL);
 
 function ProjectPage({ token, user }) {
   const { id } = useParams();
@@ -25,6 +26,7 @@ function ProjectPage({ token, user }) {
   const [editStatus, setEditStatus] = useState("");
   const [editTechStack, setEditTechStack] = useState("");
   const [editRepoUrl, setEditRepoUrl] = useState("");
+  const [inviteUsername, setInviteUsername] = useState("");
   const navigate = useNavigate();
 
   function formatTimestamp(timestamp) {
@@ -51,7 +53,7 @@ function ProjectPage({ token, user }) {
   useEffect(() => {
     if (!token) return;
 
-    fetch(`http://localhost:3000/projects/${id}`, {
+    fetch(`${import.meta.env.VITE_API_URL}/projects/${id}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -244,6 +246,52 @@ function ProjectPage({ token, user }) {
     }
   }
 
+  async function handleInvite() {
+    if (!inviteUsername.trim()) return;
+
+    try {
+      const res = await sendInvite(id, inviteUsername, token);
+
+      if (!res.error) {
+        alert(res.message || "Invite sent");
+        setInviteUsername("");
+      } else {
+        alert(res.error);
+      }
+    } catch (err) {
+      console.error("invite failed:", err);
+      alert("Failed to send invite");
+    }
+  }
+
+  async function handleRemoveMember(memberId) {
+  try {
+    const result = await removeProjectMember(token, id, memberId);
+
+    if (result.error) {
+      alert(result.error);
+      return;
+    }
+
+    setMembers((prev) => prev.filter((member) => member.id !== memberId));
+  } catch (err) {
+    console.error("remove member failed:", err);
+    alert("Failed to remove member");
+  }
+}
+
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+
+  const isOwner =
+    members.some(
+      (member) =>
+        String(member.id) === String(currentUser.id) && member.role?.toLowerCase() === "owner"
+    ) || false;
+
+  const backlogTasks = tasks.filter((task) => task.status === "backlog");
+  const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
+  const doneTasks = tasks.filter((task) => task.status === "done");
+
   if (!token || !user) {
     return <div>Loading workspace...</div>;
   }
@@ -251,30 +299,97 @@ function ProjectPage({ token, user }) {
   return (
     <div style={{ display: "flex", height: "100vh", padding: "20px", boxSizing: "border-box", gap: "20px" }}>
       {/* MEMBERS SIDEBAR */}
-      <div style={{ width: "200px", border: "1px solid #ccc", borderRadius: "8px", padding: "12px", backgroundColor: "#fafafa", }}>
+      <div
+        style={{
+          width: "240px",
+          border: "1px solid #ccc",
+          borderRadius: "8px",
+          padding: "12px",
+          backgroundColor: "#fafafa",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <h3>Members</h3>
 
-        {membersLoading ? (
-          <p>Loading...</p>
-        ) : members.length === 0 ? (
-          <p>No members in this project yet.</p>
-        ) : (
-          <ul>
-            {members.map((member) => (
-              <li key={member.id}>{member.username} {member.role ? `(${member.role})` : ""}</li>
-            ))}
-          </ul>
+        {isOwner && (
+          <div
+            style={{
+              marginBottom: "12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <input
+              type="text"
+              placeholder="Enter username"
+              value={inviteUsername}
+              onChange={(e) => setInviteUsername(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box" }}
+            />
+            <button onClick={handleInvite}>Add Member</button>
+          </div>
         )}
+
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            maxHeight: "500px",
+            borderTop: "1px solid #ddd",
+            paddingTop: "8px",
+          }}
+        >
+          {membersLoading ? (
+            <p>Loading...</p>
+          ) : members.length === 0 ? (
+            <p>No members in this project yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {members.map((member) => (
+                <div
+                  key={member.id}
+                  style={{
+                    border: "1px solid #ddd",
+                    borderRadius: "6px",
+                    padding: "8px",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  <div>
+                    {member.username} {member.role ? `(${member.role})` : ""}
+                  </div>
+
+                  {isOwner && member.role?.toLowerCase() !== "owner" && (
+                    <button
+                      onClick={() => handleRemoveMember(member.id)}
+                      style={{ marginTop: "8px" }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* TASKS SECTION */}
       <div
         style={{
-          width: "300px",
+          flex: 1.2,
           border: "1px solid #ccc",
           borderRadius: "8px",
           padding: "12px",
           marginBottom: "12px",
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+          minHeight: 0,
+          boxSizing: "border-box",
+          overflow: "hidden",
         }}
       >
         <h3>Tasks</h3>
@@ -317,69 +432,226 @@ function ProjectPage({ token, user }) {
         ) : tasks.length === 0 ? (
           <p>No tasks yet. Create the first task for this project.</p>
         ) : (
-          ["backlog", "in_progress", "done"].map((status) => (
-            <div key={status} style={{ marginBottom: "16px" }}>
-              <h4 style={{ textTransform: "capitalize" }}>
-                {status.replace("_", " ")}
-              </h4>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflowX: "auto",
+              overflowY: "hidden",
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 300px)",
+                gap: "12px",
+                alignItems: "stretch",
+                minWidth: "936px",
+                height: "100%",
+              }}
+            >
+              <div
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  padding: "10px",
+                  backgroundColor: "#fafafa",
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "100%",
+                  minHeight: 0,
+                  boxSizing: "border-box",
+                  overflow: "hidden",
+                }}
+              >
+                <h4>Backlog</h4>
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                  {backlogTasks.length === 0 ? (
+                    <p>No backlog tasks</p>
+                  ) : (
+                    backlogTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        style={{
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          padding: "8px",
+                          marginBottom: "8px",
+                          backgroundColor: "#f4f4f4",
+                          boxSizing: "border-box",
+                          width: "100%",
+                        }}
+                      >
+                        <div style={{ fontWeight: "bold" }}>{task.title}</div>
+                        <div>{task.description}</div>
 
-              {tasks
-                .filter((task) => task.status === status)
-                .map((task) => (
-                  <div
-                    key={task.id}
-                    style={{
-                      border: "1px solid #ddd",
-                      borderRadius: "6px",
-                      padding: "8px",
-                      marginBottom: "8px",
-                      backgroundColor: "#f4f4f4",
-                    }}
-                  >
-                    <div style={{ fontWeight: "bold" }}>{task.title}</div>
+                        {task.assigned_username && (
+                          <div style={{ fontSize: "12px", color: "gray" }}>
+                            Assigned to: {task.assigned_username}
+                          </div>
+                        )}
 
-                    <div>{task.description}</div>
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            display: "flex",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <button onClick={() => handleMoveTask(task.id, "in_progress")}>
+                            Move to In Progress
+                          </button>
 
-                    {task.assigned_username && (
-                      <div style={{ fontSize: "12px", color: "gray" }}>
-                        Assigned to: {task.assigned_username}
+                          {isOwner && (
+                            <button onClick={() => handleDeleteTask(task.id)}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    ))
+                  )}
+                </div>
+              </div>
 
-                    <div style={{ marginTop: "8px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      {task.status === "backlog" && (
-                        <button onClick={() => handleMoveTask(task.id, "in_progress")}>
-                          Move to In Progress
-                        </button>
-                      )}
+              <div
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  padding: "10px",
+                  backgroundColor: "#fafafa",
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "100%",
+                  minHeight: 0,
+                  boxSizing: "border-box",
+                  overflow: "hidden",
+                }}
+              >
+                <h4>In Progress</h4>
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                  {inProgressTasks.length === 0 ? (
+                    <p>No in-progress tasks</p>
+                  ) : (
+                    inProgressTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        style={{
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          padding: "8px",
+                          marginBottom: "8px",
+                          backgroundColor: "#f4f4f4",
+                          boxSizing: "border-box",
+                          width: "100%",
+                        }}
+                      >
+                        <div style={{ fontWeight: "bold" }}>{task.title}</div>
+                        <div>{task.description}</div>
 
-                      {task.status === "in_progress" && (
-                        <>
+                        {task.assigned_username && (
+                          <div style={{ fontSize: "12px", color: "gray" }}>
+                            Assigned to: {task.assigned_username}
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            display: "flex",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <button onClick={() => handleMoveTask(task.id, "backlog")}>
                             Move to Backlog
                           </button>
+
                           <button onClick={() => handleMoveTask(task.id, "done")}>
                             Move to Done
                           </button>
-                        </>
-                      )}
 
-                      {task.status === "done" && (
-                        <button onClick={() => handleMoveTask(task.id, "in_progress")}>
-                          Move Back to In Progress
-                        </button>
-                      )}
+                          {isOwner && (
+                            <button onClick={() => handleDeleteTask(task.id)}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
 
-                      <button onClick={() => handleDeleteTask(task.id)}>
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div
+                style={{
+                  border: "1px solid #ddd",
+                  borderRadius: "8px",
+                  padding: "10px",
+                  backgroundColor: "#fafafa",
+                  display: "flex",
+                  flexDirection: "column",
+                  height: "100%",
+                  minHeight: 0,
+                  boxSizing: "border-box",
+                  overflow: "hidden",
+                }}
+              >
+                <h4>Done</h4>
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+                  {doneTasks.length === 0 ? (
+                    <p>No completed tasks</p>
+                  ) : (
+                    doneTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        style={{
+                          border: "1px solid #ddd",
+                          borderRadius: "6px",
+                          padding: "8px",
+                          marginBottom: "8px",
+                          backgroundColor: "#f4f4f4",
+                          boxSizing: "border-box",
+                          width: "100%",
+                        }}
+                      >
+                        <div style={{ fontWeight: "bold" }}>{task.title}</div>
+                        <div>{task.description}</div>
+
+                        {task.assigned_username && (
+                          <div style={{ fontSize: "12px", color: "gray" }}>
+                            Assigned to: {task.assigned_username}
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            display: "flex",
+                            gap: "8px",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <button onClick={() => handleMoveTask(task.id, "in_progress")}>
+                            Move Back to In Progress
+                          </button>
+
+                          {isOwner && (
+                            <button onClick={() => handleDeleteTask(task.id)}>
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
-          ))
-        )}
-      </div>
+          </div>
+        )}  
+      </div>      
 
       {/* CHAT SECTION */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", border: "1px solid #ccc", borderRadius: "8px", padding: "12px", backgroundColor: "#fff" }}>
@@ -392,7 +664,7 @@ function ProjectPage({ token, user }) {
           <div style={{ marginBottom: "16px" }}>
             <h2>{project.name}</h2>
 
-            {editingProject ? (
+            {isOwner && editingProject ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <input
                   placeholder="Description"
@@ -441,20 +713,28 @@ function ProjectPage({ token, user }) {
               </>
             )}
 
-            <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
-              {editingProject ? (
-                <>
-                  <button onClick={handleSaveProject}>Save</button>
-                  <button onClick={() => {setEditDescription(project.description || "");
-                                          setEditStatus(project.status || "");
-                                          setEditTechStack(project.tech_stack || "");
-                                          setEditRepoUrl(project.repo_url || "");
-                                          setEditingProject(false);}}>Cancel</button>
-                </>
-              ) : (
-                <button onClick={() => setEditingProject(true)}>Edit Project</button>
-              )}
-            </div>
+            {isOwner && (
+              <div style={{ marginTop: "12px", display: "flex", gap: "8px" }}>
+                {isOwner && editingProject ? (
+                  <>
+                    <button onClick={handleSaveProject}>Save</button>
+                    <button
+                      onClick={() => {
+                        setEditDescription(project.description || "");
+                        setEditStatus(project.status || "");
+                        setEditTechStack(project.tech_stack || "");
+                        setEditRepoUrl(project.repo_url || "");
+                        setEditingProject(false);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => setEditingProject(true)}>Edit Project</button>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <h2>Loading project workspace...</h2>

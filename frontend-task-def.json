@@ -1,0 +1,29 @@
+{
+  "family": "devcollab-frontend-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::654481053677:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "devcollab-frontend",
+      "image": "654481053677.dkr.ecr.us-east-1.amazonaws.com/devcollab-frontend:v9",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 5173,
+          "protocol": "tcp"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/devcollab",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "frontend"
+        }
+      }
+    }
+  ]
+}
